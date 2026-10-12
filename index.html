@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PR Review Agent</title>
+<style>
+  :root { --bg:#224A41; --panel:#1C3B34; --deep:#173029; --line:#32645B; --ink:#EFF5F3; --muted:#B9CFC7;
+          --dim:#7BA392; --accent:#BBD96D; --mint:#70CD96; --crit:#F17592; --major:#F8947F;
+          --minor:#E8D46B; --nit:#81CEEA; --mono:ui-monospace,"SFMono-Regular",Menlo,monospace; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+         padding:28px 24px; }
+  html.embed body { padding:20px; }
+  html.embed header { display:none; }
+  header h1 { margin:0 0 4px; font-size:22px; font-weight:500; letter-spacing:-.3px; }
+  header p { margin:0 0 20px; color:var(--muted); font-size:14px; }
+  .mono { font-family:var(--mono); }
+  .label { font:12px/16px var(--mono); text-transform:uppercase; letter-spacing:.06em; color:var(--dim); }
+  form { display:flex; gap:10px; }
+  input { flex:1; min-width:0; background:var(--deep); border:1px solid var(--line); border-radius:20px; color:var(--ink);
+          padding:11px 16px; font:14px var(--mono); outline:none; }
+  input:focus { border-color:var(--mint); }
+  button { font:13px/15px var(--mono); text-transform:uppercase; letter-spacing:.06em; border:1px solid var(--accent);
+           border-radius:20px; padding:11px 20px; cursor:pointer; background:var(--accent); color:var(--bg); white-space:nowrap; }
+  button:hover { background:transparent; color:var(--accent); }
+  button:disabled { opacity:.5; cursor:default; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center; }
+  .chip { background:transparent; color:var(--muted); border-color:var(--line); padding:6px 12px; font-size:11px; }
+  .chip:hover { color:var(--ink); border-color:var(--muted); background:transparent; }
+  #status { margin-top:12px; min-height:20px; font:12px/18px var(--mono); color:var(--muted); }
+  #status.err { color:var(--major); }
+  #target { margin-top:6px; font-size:14px; color:var(--muted); min-height:21px; }
+  #target a { color:var(--ink); }
+  .steps { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin:16px 0; }
+  .step { background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:10px 12px; min-height:96px; }
+  .step .head { display:flex; align-items:center; gap:8px; font:12px/16px var(--mono); text-transform:uppercase;
+                letter-spacing:.06em; color:var(--muted); }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--line); flex:none; }
+  .step.running .dot { background:var(--accent); animation:pulse 1s ease-in-out infinite; }
+  .step.done .dot { background:var(--mint); }
+  .step.error .dot { background:var(--crit); }
+  .step.running { border-color:var(--accent); }
+  .step .detail { margin-top:6px; font:11.5px/16px var(--mono); color:var(--dim); word-break:break-word; }
+  .step .detail b { color:var(--ink); font-weight:500; }
+  @keyframes pulse { 50% { opacity:.3; } }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .pane { background:var(--panel); border:1px solid var(--line); border-radius:4px; display:flex; flex-direction:column; min-width:0; }
+  .pane > .label { padding:10px 14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; }
+  .scroll { height:440px; overflow-y:auto; padding:12px 14px; }
+  .empty { color:var(--dim); font-size:13px; }
+  .msg { margin:0 0 10px; color:var(--ink); white-space:pre-wrap; font-size:14px; }
+  .msg.md { white-space:normal; } .msg.md p { margin:0 0 8px; }
+  .msg code { font:12.5px var(--mono); background:var(--deep); padding:0 4px; border-radius:3px; }
+  .msg.live::after { content:"▍"; color:var(--mint); animation:pulse 1s steps(1) infinite; }
+  .tool { display:flex; gap:8px; align-items:baseline; margin:0 0 8px; font:12px/17px var(--mono); color:var(--muted); }
+  .tool .name { color:var(--accent); flex:none; }
+  .tool .arg { color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .tool .res { margin-left:auto; flex:none; color:var(--dim); }
+  .tool .res.bad { color:var(--major); }
+  .log { font:11px/15px var(--mono); color:var(--dim); white-space:pre-wrap; margin:0 0 6px; }
+  .card { border:1px solid var(--line); border-radius:4px; background:var(--deep); padding:10px 12px; margin:0 0 10px;
+          animation:slidein .25s ease-out; }
+  @keyframes slidein { from { opacity:0; transform:translateY(6px); } }
+  .card .meta { display:flex; gap:8px; align-items:center; font:11px/16px var(--mono); color:var(--muted); flex-wrap:wrap; }
+  .pill { border-radius:10px; padding:1px 8px; font:11px/16px var(--mono); text-transform:uppercase; color:var(--deep); }
+  .critical { background:var(--crit); } .major { background:var(--major); } .minor { background:var(--minor); }
+  .nit { background:var(--nit); } .ev { background:var(--accent); }
+  .card h4 { margin:6px 0 4px; font-size:14px; font-weight:500; }
+  .card .body { font-size:13px; color:var(--muted); }
+  .card .body p { margin:0 0 6px; }
+  .card code { font:12px var(--mono); background:var(--panel); padding:0 4px; border-radius:3px; color:var(--ink); }
+  pre { margin:6px 0 0; background:#10241F; border:1px solid var(--line); border-radius:4px; padding:8px 10px; overflow-x:auto;
+        font:11.5px/16px var(--mono); color:#C0EAD4; white-space:pre; }
+  .toggle { margin-left:auto; background:none; border:none; color:var(--dim); padding:0; font:11px var(--mono); text-transform:none; letter-spacing:0; }
+  .toggle:hover { color:var(--ink); background:none; }
+  .review { border-color:var(--accent); }
+  .stats { display:flex; gap:18px; flex-wrap:wrap; margin-top:12px; font:12px/18px var(--mono); color:var(--muted); min-height:18px; }
+  .stats b { color:var(--ink); font-weight:500; }
+  .badge { color:var(--accent); }
+  @media (max-width: 760px) {
+    body { padding:16px; } form { flex-direction:column; } button#go { width:100%; }
+    .steps { grid-template-columns:1fr; } .step { min-height:0; } .cols { grid-template-columns:1fr; }
+    .scroll { height:360px; }
+  }
+</style>
+<script>
+  if (new URLSearchParams(location.search).has("embed")) document.documentElement.classList.add("embed");
+</script>
+</head>
+<body>
+<header>
+  <h1>PR review agent</h1>
+  <p>Claude Agent SDK in a no-egress Chalk sandbox, reviewing a public GitHub pull request through the Chalk router.</p>
+</header>
+
+<form id="form">
+  <input id="url" type="url" placeholder="https://github.com/owner/repo/pull/123  (or just a repo)" required>
+  <button id="go" type="submit">Review</button>
+</form>
+<div class="chips" id="chips"><span class="label">Try</span></div>
+<div id="status"></div>
+<div id="target"></div>
+
+<div class="steps" id="steps"></div>
+
+<div class="cols">
+  <div class="pane">
+    <div class="label"><span>Agent session</span><span id="turns"></span></div>
+    <div class="scroll" id="session"><div class="empty">The agent's reasoning and tool calls stream here as they happen.</div></div>
+  </div>
+  <div class="pane">
+    <div class="label"><span>Feedback objects</span><span id="count"></span></div>
+    <div class="scroll" id="feedback"><div class="empty">Each comment appears here as a GitHub review-comment object, ready to post.</div></div>
+  </div>
+</div>
+<div class="stats" id="stats"></div>
+
+<script>
+const STEPS = [
+  ["volume", "1 · Volume"], ["sandbox", "2 · No-egress container"], ["router", "3 · Chalk router"],
+  ["session", "4 · Agent session"], ["feedback", "5 · Feedback"],
+];
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+let source = null, live = null, tools = {}, nComments = 0, nTools = 0;
+
+function md(text) {
+  // Minimal markdown for comment bodies: escapes first, then fences, inline code, bold, paragraphs.
+  const parts = String(text ?? "").split(/```(?:suggestion|[a-z]*)?\n?([\s\S]*?)```/g);
+  return parts.map((p, i) => i % 2 ? `<pre>${esc(p.replace(/\n$/, ""))}</pre>`
+    : esc(p).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+        .split(/\n{2,}/).filter((x) => x.trim()).map((x) => `<p>${x.replace(/\n/g, "<br>")}</p>`).join("")).join("");
+}
+
+function resetUI() {
+  $("steps").innerHTML = STEPS.map(([k, t]) =>
+    `<div class="step" id="step-${k}"><div class="head"><span class="dot"></span>${t}</div><div class="detail" id="d-${k}"></div></div>`).join("");
+  $("session").innerHTML = ""; $("feedback").innerHTML = ""; $("stats").innerHTML = "";
+  $("target").innerHTML = ""; $("turns").textContent = ""; $("count").textContent = "";
+  live = null; tools = {}; nComments = 0; nTools = 0;
+}
+resetUI();
+$("session").innerHTML = '<div class="empty">The agent\'s reasoning and tool calls stream here as they happen.</div>';
+$("feedback").innerHTML = '<div class="empty">Each comment appears here as a GitHub review-comment object, ready to post.</div>';
+
+function setStep(k, status) {
+  const el = $(`step-${k}`); if (!el) return;
+  if (el.classList.contains("done") && status === "running") return;
+  el.className = `step ${status}`;
+}
+function detail(k, html) { const el = $(`d-${k}`); if (el) el.innerHTML = html; }
+function status(text, err) { $("status").textContent = text; $("status").className = err ? "err" : ""; }
+function scroll(el) { if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) el.scrollTop = el.scrollHeight; }
+const kb = (n) => n == null ? "" : n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.round(n / 1000)} KB`;
+
+function toolArg(name, input) {
+  if (name === "Read") return (input.file_path || "").replace(/^\/review\/repo\//, "").replace(/^\/review\//, "");
+  if (name === "Grep") return `${input.pattern}${input.path ? "  in " + input.path.replace(/^\/review\/repo\/?/, "") : ""}`;
+  if (name === "Glob") return input.pattern;
+  if (name.endsWith("add_review_comment")) return `${input.path}:${input.line}  ${input.title || ""}`;
+  if (name.endsWith("submit_review")) return input.event;
+  return JSON.stringify(input).slice(0, 120);
+}
+
+function onEvent(e) {
+  const S = $("session"), F = $("feedback");
+  switch (e.t) {
+    case "hello": if (e.replay) $("stats").innerHTML = '<span class="badge">Replaying a recorded run of this commit</span>'; break;
+    case "target": {
+      const g = e.target;
+      $("target").innerHTML = `<a href="${esc(g.url)}" target="_blank" rel="noopener">${esc(g.repo)} ${esc(g.label)}</a> · ${esc(g.title)}` +
+        ` <span class="mono">+${g.additions} −${g.deletions} in ${g.changed_files} files</span>`;
+      status("Reviewing…"); break;
+    }
+    case "step": setStep(e.step, e.status); break;
+    case "step_detail": detail(e.step, esc(e.detail)); break;
+    case "volume":
+      detail("volume", `<b>${esc(e.name)}@v${e.version}</b><br>` + (e.reused ? "reused snapshot of this commit"
+        : `${e.files} files · ${kb(e.bytes)} · ${e.seconds}s`)); break;
+    case "sandbox":
+      detail("sandbox", `gVisor · mounted read-only at <b>/review</b><br>egress: <b>${esc(e.egress_allowlist.join(", "))}</b> only<br>${esc(e.probe)}`); break;
+    case "router": detail("router", `<b>${esc(e.model)}</b><br>${esc(e.base_url.replace(/^https?:\/\//, ""))}<br>key swapped in at egress`); break;
+    case "text":
+      if (!live) { S.querySelector(".empty")?.remove(); live = document.createElement("p"); live.className = "msg live"; S.appendChild(live); }
+      live.textContent += e.text; scroll(S); break;
+    case "text_end": if (live) { live.className = "msg md"; live.innerHTML = md(live.textContent.trim()); live = null; } break;
+    case "tool_use": {
+      if (live) onEvent({ t: "text_end" });
+      S.querySelector(".empty")?.remove();
+      const name = e.name.replace(/^mcp__review__/, "");
+      const row = document.createElement("div");
+      row.className = "tool";
+      row.innerHTML = `<span class="name">${esc(name)}</span><span class="arg">${esc(toolArg(e.name, e.input || {}))}</span><span class="res">…</span>`;
+      S.appendChild(row); tools[e.id] = row; nTools++;
+      detail("session", `<b>${nTools}</b> tool calls`); scroll(S); break;
+    }
+    case "tool_result": {
+      const res = tools[e.id]?.querySelector(".res"); if (!res) break;
+      if (e.is_error) { res.className = "res bad"; res.textContent = "✗ " + (e.preview || "").split(/[.\n]/)[0].slice(0, 48); }
+      else res.textContent = "✓ " + (e.lines > 1 ? `${e.lines} lines` : "ok");
+      break;
+    }
+    case "comment": {
+      F.querySelector(".empty")?.remove();
+      const c = e.comment, g = c.github, card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `<div class="meta"><span class="pill ${esc(c.severity)}">${esc(c.severity)}</span><span>${esc(c.category)}</span>` +
+        `<span>${esc(g.path)}:${g.line} ${g.side === "LEFT" ? "(old)" : ""}</span><button class="toggle">{ } json</button></div>` +
+        `<h4>${esc(c.title)}</h4><div class="body">${md(g.body.split("\n\n").slice(1).join("\n\n"))}</div>` +
+        `<pre hidden>${esc(JSON.stringify(g, null, 2))}</pre>`;
+      const btn = card.querySelector(".toggle"), raw = card.lastElementChild, body = card.querySelector(".body");
+      btn.onclick = () => { raw.hidden = !raw.hidden; body.hidden = !raw.hidden; };
+      F.appendChild(card); nComments++;
+      $("count").textContent = `${nComments} comment${nComments === 1 ? "" : "s"}`;
+      setStep("feedback", "running"); detail("feedback", `<b>${nComments}</b> review comment${nComments === 1 ? "" : "s"}`);
+      scroll(F); break;
+    }
+    case "review": {
+      F.querySelector(".empty")?.remove();
+      const r = e.review, card = document.createElement("div");
+      card.className = "card review";
+      card.innerHTML = `<div class="meta"><span class="pill ev">${esc(r.payload.event)}</span><span>${esc(r.endpoint)}</span>` +
+        `<button class="toggle">copy</button></div><h4>Review payload</h4><div class="body">${md(r.payload.body)}</div>` +
+        `<pre>${esc(JSON.stringify(r.payload, null, 2))}</pre>`;
+      card.querySelector(".toggle").onclick = (ev) => {
+        navigator.clipboard?.writeText(JSON.stringify(r.payload, null, 2)); ev.target.textContent = "copied";
+      };
+      F.appendChild(card); scroll(F);
+      setStep("feedback", "done");
+      detail("feedback", `<b>${nComments}</b> comments · <b>${esc(r.payload.event)}</b><br>ready for ${esc(r.endpoint.split(" ")[0])} /pulls/…/reviews`);
+      break;
+    }
+    case "result": {
+      const u = e.usage || {}, tok = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+      $("turns").textContent = `${e.turns} turns`;
+      $("stats").innerHTML += ` <span><b>${e.turns}</b> turns</span><span><b>${(e.duration_ms / 1000).toFixed(0)}s</b> agent time</span>` +
+        `<span><b>${Math.round(tok / 1000)}k</b> input · <b>${Math.round((u.output_tokens || 0) / 1000)}k</b> output tokens</span>` +
+        (e.cost_usd != null ? `<span><b>$${e.cost_usd.toFixed(2)}</b></span>` : "");
+      detail("session", `<b>${e.turns}</b> turns · <b>${nTools}</b> tool calls · ${(e.duration_ms / 1000).toFixed(0)}s`);
+      break;
+    }
+    case "log": break;
+    case "error": status(e.message, true); STEPS.forEach(([k]) => { if ($(`step-${k}`).classList.contains("running")) setStep(k, "error"); }); break;
+    case "end": status($("status").className === "err" ? $("status").textContent : "Done."); finish(); break;
+  }
+}
+
+function finish() { if (source) { source.close(); source = null; } $("go").disabled = false; }
+
+async function start(url) {
+  if (source) source.close();
+  $("url").value = url; $("go").disabled = true; resetUI(); status("Resolving the link on GitHub…");
+  let resp;
+  try {
+    resp = await fetch("api/reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) });
+  } catch (err) { status("Could not reach the demo server.", true); finish(); return; }
+  const body = await resp.json().catch(() => ({}));
+  if (!resp.ok) { status(body.error || `Request failed (${resp.status}).`, true); finish(); return; }
+  source = new EventSource(`api/reviews/${body.id}/events`);
+  source.onmessage = (m) => onEvent(JSON.parse(m.data));
+  source.onerror = () => { if (source) { status("Lost the connection to the demo server.", true); finish(); } };
+}
+
+$("form").onsubmit = (ev) => { ev.preventDefault(); start($("url").value.trim()); };
+fetch("api/examples").then((r) => r.json()).then((xs) => xs.forEach((x) => {
+  const b = document.createElement("button"); b.className = "chip"; b.type = "button"; b.textContent = x.label;
+  b.onclick = () => start(x.url); $("chips").appendChild(b);
+})).catch(() => {});
+</script>
+</body>
+</html>
