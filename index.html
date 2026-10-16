@@ -91,7 +91,7 @@
 <body>
 <header>
   <h1>PR review agent</h1>
-  <p>Claude Agent SDK in a no-egress Chalk sandbox, reviewing a public GitHub pull request through the Chalk router.</p>
+  <p>Review a public GitHub pull request and inspect the comments before posting. The agent runs in a Chalk sandbox with network access limited to the model gateway.</p>
 </header>
 
 <form id="form">
@@ -107,19 +107,19 @@
 <div class="cols">
   <div class="pane">
     <div class="label"><span>Agent session</span><span id="turns"></span></div>
-    <div class="scroll" id="session"><div class="empty">The agent's reasoning and tool calls stream here as they happen.</div></div>
+    <div class="scroll" id="session"><div class="empty">Agent updates and tool calls appear here during the review.</div></div>
   </div>
   <div class="pane">
-    <div class="label"><span>Feedback objects</span><span id="count"></span></div>
-    <div class="scroll" id="feedback"><div class="empty">Each comment appears here as a GitHub review-comment object, ready to post.</div></div>
+    <div class="label"><span>Review comments</span><span id="count"></span></div>
+    <div class="scroll" id="feedback"><div class="empty">Read the comments and copy the review payload. This demo does not post to GitHub.</div></div>
   </div>
 </div>
 <div class="stats" id="stats"></div>
 
 <script>
 const STEPS = [
-  ["volume", "1 · Volume"], ["sandbox", "2 · No-egress container"], ["router", "3 · Chalk router"],
-  ["session", "4 · Agent session"], ["feedback", "5 · Feedback"],
+  ["volume", "1 · Code snapshot"], ["sandbox", "2 · Network limits"], ["router", "3 · Model gateway"],
+  ["session", "4 · Review"], ["feedback", "5 · Comments"],
 ];
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -142,7 +142,7 @@ function resetUI() {
 }
 resetUI();
 $("session").innerHTML = '<div class="empty">The agent\'s reasoning and tool calls stream here as they happen.</div>';
-$("feedback").innerHTML = '<div class="empty">Each comment appears here as a GitHub review-comment object, ready to post.</div>';
+$("feedback").innerHTML = '<div class="empty">Read the comments and copy the review payload. This demo does not post to GitHub.</div>';
 
 function setStep(k, status) {
   const el = $(`step-${k}`); if (!el) return;
