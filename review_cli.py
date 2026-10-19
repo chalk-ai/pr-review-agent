@@ -8,7 +8,7 @@
 
     ./review_cli.py https://github.com/<owner>/<repo>/pull/<n> [--env-id <environment>]
 
-Credentials come from `chalk config` in the current directory (or the CHALK_* env vars). The
+Credentials come from your existing `chalk login` (or the CHALK_* env vars). The
 environment needs the Chalk router enabled and a secret holding a router API key
 (`chalk router api-key create`, stored as CHALK_ROUTER_API_KEY by default).
 """
@@ -18,19 +18,23 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import sys
 
 
-def load_chalk_env(env_id: str | None) -> None:
-    if "CHALK_CLIENT_ID" not in os.environ:
-        cfg = json.loads(subprocess.check_output(["chalk", "config", "--json"]))
-        os.environ["CHALK_API_SERVER"] = cfg["apiServer"]["value"]
-        os.environ["CHALK_CLIENT_ID"] = cfg["clientId"]["value"]
-        os.environ["CHALK_CLIENT_SECRET"] = cfg["clientSecret"]["value"]
-        os.environ.setdefault("CHALK_ENVIRONMENT_ID", cfg["environment"]["value"])
+def configure_chalk(env_id: str | None) -> None:
+    """Resolve deployment routing settings using the SDK's ambient login."""
+    from chalkcompute import ConnectClient
+
     if env_id:
-        os.environ["CHALK_ENVIRONMENT_ID"] = env_id
+        os.environ["CHALK_ENVIRONMENT"] = env_id
+    client = ConnectClient()
+    try:
+        client._ensure_auth()
+        # Only routing settings are needed by the deployed app; credentials stay in the SDK.
+        os.environ["CHALK_API_SERVER"] = client._api_server
+        os.environ["CHALK_ENVIRONMENT_ID"] = client._env_id
+    finally:
+        client.close()
 
 
 def main() -> None:
@@ -42,7 +46,7 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, default=600)
     args = parser.parse_args()
 
-    load_chalk_env(args.env_id)
+    configure_chalk(args.env_id)
     from pipeline import ReviewError, RouterConfig, resolve, run_review
 
     router = RouterConfig(

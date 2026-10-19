@@ -37,7 +37,7 @@ The demo is mostly about where the agent runs:
 ## Run it
 
 You need [`uv`](https://docs.astral.sh/uv/) and a Chalk environment with the router enabled
-(`chalk router status`). Credentials come from `chalk config` in the current directory.
+(`chalk router status`). Credentials come from the SDK’s ambient credentials from `chalk login`.
 
 ```bash
 chalk login
@@ -86,3 +86,10 @@ uv run --with pytest --with claude-agent-sdk python -m pytest test_review_agent.
 ## License
 
 Apache-2.0.
+
+## Local authentication
+
+The SDK reads credentials, API host, and the selected environment from your existing
+`chalk login` in `~/.chalk.yml`, including project-scoped and default logins.
+For unattended runs, `CHALK_CLIENT_ID` and `CHALK_CLIENT_SECRET` remain supported. Where available, `--env-id`
+overrides the target environment; otherwise the SDK uses your login or environment settings.
