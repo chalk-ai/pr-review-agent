@@ -2,7 +2,7 @@
 #
 # /// script
 # requires-python = ">=3.12,<3.14"
-# dependencies = ["chalkcompute==2.13.4", "httpx"]
+# dependencies = ["chalkcompute>=2.13.8", "httpx"]
 # ///
 """Review a public GitHub pull request from the command line, using the same pipeline as the web demo.
 
@@ -17,22 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
-
-
-def configure_chalk() -> None:
-    """Resolve deployment routing settings using the SDK's ambient login."""
-    from chalkcompute import ConnectClient
-
-    client = ConnectClient()
-    try:
-        client._ensure_auth()
-        # Only routing settings are needed by the deployed app; credentials stay in the SDK.
-        os.environ["CHALK_API_SERVER"] = client._api_server
-        os.environ["CHALK_ENVIRONMENT_ID"] = client._env_id
-    finally:
-        client.close()
 
 
 def main() -> None:
@@ -40,15 +25,17 @@ def main() -> None:
     parser.add_argument("url")
     args = parser.parse_args()
 
-    configure_chalk()
     from pipeline import ReviewError, RouterConfig, resolve, run_review
 
-    router = RouterConfig(
-        base_url=os.environ["CHALK_API_SERVER"].rstrip("/") + "/v1/router",
-        environment_id=os.environ["CHALK_ENVIRONMENT_ID"],
-        key_secret='CHALK_ROUTER_API_KEY',
-        model='anthropic/claude-sonnet-5-5',
-    )
+    from chalkcompute import ConnectClient
+
+    with ConnectClient() as connection:
+        router = RouterConfig(
+            base_url=connection.api_server + "/v1/router",
+            environment_id=connection.environment_id,
+            key_secret='CHALK_ROUTER_API_KEY',
+            model='anthropic/claude-sonnet-5-5',
+        )
     try:
         target = resolve(args.url)
     except ReviewError as exc:
