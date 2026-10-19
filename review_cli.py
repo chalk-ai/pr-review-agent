@@ -6,7 +6,7 @@
 # ///
 """Review a public GitHub pull request from the command line, using the same pipeline as the web demo.
 
-    ./review_cli.py https://github.com/<owner>/<repo>/pull/<n> [--env-id <environment>]
+    ./review_cli.py https://github.com/<owner>/<repo>/pull/<n>
 
 Credentials come from your existing `chalk login` (or the CHALK_* env vars). The
 environment needs the Chalk router enabled and a secret holding a router API key
@@ -21,12 +21,10 @@ import os
 import sys
 
 
-def configure_chalk(env_id: str | None) -> None:
+def configure_chalk() -> None:
     """Resolve deployment routing settings using the SDK's ambient login."""
     from chalkcompute import ConnectClient
 
-    if env_id:
-        os.environ["CHALK_ENVIRONMENT"] = env_id
     client = ConnectClient()
     try:
         client._ensure_auth()
@@ -40,27 +38,23 @@ def configure_chalk(env_id: str | None) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("url")
-    parser.add_argument("--env-id", default=None)
-    parser.add_argument("--model", default="anthropic/claude-sonnet-5-5")
-    parser.add_argument("--key-secret", default="CHALK_ROUTER_API_KEY")
-    parser.add_argument("--timeout", type=int, default=600)
     args = parser.parse_args()
 
-    configure_chalk(args.env_id)
+    configure_chalk()
     from pipeline import ReviewError, RouterConfig, resolve, run_review
 
     router = RouterConfig(
         base_url=os.environ["CHALK_API_SERVER"].rstrip("/") + "/v1/router",
         environment_id=os.environ["CHALK_ENVIRONMENT_ID"],
-        key_secret=args.key_secret,
-        model=args.model,
+        key_secret='CHALK_ROUTER_API_KEY',
+        model='anthropic/claude-sonnet-5-5',
     )
     try:
         target = resolve(args.url)
     except ReviewError as exc:
         sys.exit(str(exc))
 
-    for event in run_review(target, router, args.timeout):
+    for event in run_review(target, router, 600):
         t = event["t"]
         if t == "text":
             print(event["text"], end="", flush=True)
